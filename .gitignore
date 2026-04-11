@@ -1,0 +1,10 @@
+*.avi
+*.mp4
+*.csv
+*.pt
+*.onnx
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+venv/
+runs/
