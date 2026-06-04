@@ -1,0 +1,20 @@
+# Dependencias de Etapa 2 (metricas cinematicas basicas)
+#
+# - pandas, numpy: ya vienen en requirements.txt, listadas aca por claridad
+# - scipy:        gaussian_filter (heatmap)
+# - kloppy:       adaptador opcional para datos Metrica Sports
+#                  (se importa perezosamente; el resto del paquete
+#                  funciona aunque no este instalado)
+#
+# Instalacion:
+#     pip install -r requirements-metricas.txt
+#
+# Si kloppy falla por conflictos de versiones en Windows, probar
+# primero sin kloppy: las funciones smooth_positions, compute_kinematics,
+# cumulative_distance y build_heatmap (sobre DataFrames propios o
+# sobre los CSVs de Etapa 1) no lo necesitan.
+
+pandas
+numpy
+scipy
+kloppy

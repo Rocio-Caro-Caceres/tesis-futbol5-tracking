@@ -8,3 +8,20 @@ __pycache__/
 .ipynb_checkpoints/
 venv/
 runs/
+
+# Etapa 1: chunks de tracking (salida de tracking.py)
+chunks/
+
+# Etapa 4: datos + modelos (salida de download / normalize / features / train)
+ETAPA4_data/
+data/soccernet/
+
+# Docker / DB
+db/.env
+db/data/
+
+# Python
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/

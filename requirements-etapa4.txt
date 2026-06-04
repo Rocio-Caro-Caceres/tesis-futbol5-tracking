@@ -1,0 +1,24 @@
+# ============================================================================
+# requirements-etapa4.txt
+# Dependencias de la Etapa 4 (clasificador ML de Pases / Duelos / Faltas).
+# Pip install aditivo sobre requirements.txt / requirements-db.txt /
+# requirements-metricas.txt. NO contiene paquetes de Etapas 1-3.
+# ============================================================================
+
+# --- Descarga SoccerNet (solo annotations + tracking, sin video)
+SoccerNet>=0.1.0
+
+# --- Features / I/O tabular
+pandas>=2.0
+numpy>=1.24
+pyarrow>=14.0          # Parquet
+scikit-learn>=1.3      # metrics + class_weight
+
+# --- Modelo tabular
+xgboost>=2.0
+
+# --- Modelo secuencial (CPU funciona para el modelo chico; CUDA opcional)
+torch>=2.0
+
+# --- Progreso (util para el pipeline que recorre 500+ partidos)
+tqdm>=4.65

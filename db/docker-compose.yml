@@ -1,0 +1,31 @@
+services:
+  db:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: tesis-futbol5/timescaledb-postgis:pg16
+    container_name: tesis_futbol5_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-futbol5}
+      POSTGRES_USER: ${POSTGRES_USER:-futbol5}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-futbol5}
+      # Recomendado por TimescaleDB para cargas analiticas
+      TS_TUNE_MEMORY: 1
+      TS_TUNE_NUM_CPUS: 1
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      # Los SQL idempotentes de la etapa 1 se montan en docker-entrypoint-initdb.d
+      # para que se ejecuten solo la primera vez que se inicializa el volumen.
+      - ./sql:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  db_data:
+    name: tesis_futbol5_db_data

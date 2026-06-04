@@ -240,3 +240,140 @@ Este sistema fue desarrollado con una sola cámara mal posicionada como prueba d
 - **Homografía** para transformar coordenadas de píxeles a metros reales en el campo
 - **Heatmaps** de posicionamiento táctico por jugador
 - **Métricas físicas** como distancia recorrida y velocidad máxima
+
+---
+
+## Etapa 1 — Persistencia en PostgreSQL (TimescaleDB + PostGIS)
+
+Esta etapa reemplaza la salida CSV por una base relacional con series
+temporales. El diseño atómico es **una fila por objeto por frame**.
+
+### Arquitectura
+
+```
+  tracking.py ──► chunks/<match_id>/chunk_*.json ──► ingest.py ──► PostgreSQL
+                                                            │
+                                                            ├─ tracking_events  (hypertable)
+                                                            ├─ game_events      (hypertable)
+                                                            └─ match_summary    (catalogo)
+```
+
+### Levantar la base de datos
+
+Requisitos: Docker Desktop con `docker compose`.
+
+```powershell
+cd db
+copy .env.example .env       # editar credenciales si queres
+docker compose up -d
+docker compose logs -f db    # esperar al "database system is ready"
+```
+
+La primera vez se ejecuta `db/sql/01_schema.sql` ... `04_grants.sql` en orden,
+creando extensiones, tablas, hypertables e índices.
+
+### Instalar dependencias de la etapa 1
+
+```powershell
+pip install -r requirements-db.txt
+```
+
+### Generar chunks JSON (en lugar de CSV)
+
+`tracking.py` ahora escribe un JSON cada 150 frames bajo `chunks/<match_id>/`:
+
+```
+chunks/
+└── partido_f5/
+    ├── match.json
+    ├── chunk_00000.json
+    ├── chunk_00001.json
+    └── ...
+```
+
+Cada chunk tiene la forma:
+
+```json
+{
+  "match_id": "partido_f5",
+  "schema_version": 1,
+  "metadata": { "fps": 24, "width": 1920, "height": 1080,
+                "field_length_m": 105, "field_width_m": 68,
+                "homography": null, "start_frame": 0, "end_frame": 149 },
+  "tracking": [ {"frame": 0, "track_id": 1, "object_type": "player",
+                 "team": "unknown", "x": 640, "y": 360,
+                 "x_norm": 0.5, "y_norm": 0.5, "x_m": 52.5, "y_m": 34.0,
+                 "bbox_x1": 600, "bbox_y1": 320, "bbox_x2": 680, "bbox_y2": 400,
+                 "confidence": 0.87, "in_occlusion": false} ],
+  "ball":    [ {"frame": 0, "x": 320, "y": 240, "x_norm": 0.25, "y_norm": 0.22,
+                 "x_m": 26.25, "y_m": 15.0, "confidence": 0.5} ]
+}
+```
+
+### Cargar los chunks en la base (Bulk Insert con COPY)
+
+```powershell
+# Un solo partido
+python -m scripts.ingest --match-id partido_f5
+
+# Todos los partidos bajo chunks/
+python -m scripts.ingest --all
+
+# Smoke test de lo que quedo en la DB
+python -m scripts.verify_db --match-id partido_f5
+```
+
+La ingesta es **idempotente**: si se vuelve a correr, los chunks ya cargados
+(mismo `sha256`) se saltean. La geometría PostGIS se materializa en el
+`INSERT` final con `ST_SetSRID(ST_MakePoint(x_m, y_m), 3857)`.
+
+### Variables de entorno para la ingesta
+
+```
+PGHOST=localhost
+PGPORT=5432
+PGDATABASE=futbol5
+PGUSER=futbol5
+PGPASSWORD=futbol5
+```
+
+### Índices creados (Etapa 1)
+
+| Tabla              | Índice                                                | Tipo   |
+|--------------------|-------------------------------------------------------|--------|
+| `tracking_events`  | `(match_id, track_id, timestamp_ms DESC)`             | B-tree |
+| `tracking_events`  | `(match_id, frame)`                                   | B-tree |
+| `tracking_events`  | `geom`                                                | GIST   |
+| `tracking_events`  | `timestamp_ms`                                        | BRIN   |
+| `game_events`      | `(match_id, timestamp_ms DESC)`                       | B-tree |
+| `game_events`      | `(match_id, event_type, timestamp_ms DESC)`           | B-tree |
+| `game_events`      | `start_geom`                                          | GIST   |
+| `game_events`      | `metadata`                                            | GIN    |
+
+### Estructura del repositorio (actualizada)
+
+```
+tesis-futbol5-tracking/
+├── tracking.py                ← emite chunks JSON (modificado)
+├── tracking/                  ← paquete nuevo
+│   ├── chunk_writer.py        ← ventana de 150 frames -> chunk_NNNNN.json
+│   └── homography.py          ← pixel -> norm/m (identidad por ahora)
+├── db/                        ← todo lo de la base
+│   ├── docker-compose.yml
+│   ├── Dockerfile
+│   ├── .env.example
+│   ├── initdb-extensions.sh
+│   └── sql/
+│       ├── 01_schema.sql      ← tablas + PKs + comentarios
+│       ├── 02_hypertables.sql ← create_hypertable + compresion
+│       ├── 03_indexes.sql     ← indices compuestos + GIST/BRIN/GIN
+│       └── 04_grants.sql      ← rol de aplicacion
+├── scripts/
+│   ├── ingest.py              ← COPY + ON CONFLICT, idempotente
+│   └── verify_db.py           ← smoke test
+├── chunks/                    ← salida de tracking.py (gitignored)
+├── requirements.txt
+├── requirements-db.txt
+└── README.md
+```
+

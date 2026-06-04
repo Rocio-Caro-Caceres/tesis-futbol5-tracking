@@ -8,6 +8,10 @@ from ultralytics import YOLO
 from boxmot import ByteTrack
 from boxmot.trackers.bytetrack.basetrack import BaseTrack
 import gc
+import json
+
+from tracking.chunk_writer import ChunkWriter, ChunkMetadata
+from tracking.homography import PixelToField, FieldDims
 
 # =============================================================
 # 0. LIMPIEZA
@@ -102,6 +106,18 @@ DIST_MAX_REID       = 200
 IOU_OCLUSION = 0.4
 
 # =============================================================
+# 4b. SALIDA A CHUNKS JSON (Etapa 1)
+# =============================================================
+# Ventana de frames por chunk. 150 frames ~= 6.25 s a 24 fps.
+CHUNK_FRAMES  = 150
+CHUNKS_DIR    = Path('chunks')
+MATCH_ID      = 'partido_f5'
+# Mapeo track_id -> 'home' | 'away' | 'unknown'.
+# En etapa 1 se deja en 'unknown' por defecto; etapa 2 detectara
+# equipo por color de remera o por asignacion manual pre-partido.
+TEAM_BY_ID: dict[int, str] = {}
+
+# =============================================================
 # 5. ESTADO DEL POOL
 # =============================================================
 id_map             = {}
@@ -114,6 +130,24 @@ ids_estaticos        = set()
 
 # Para la pelota
 pos_pelota_historial = []  # lista de (frame, cx, cy) para el CSV
+
+# Chunk writer (Etapa 1): emite JSON por ventanas de CHUNK_FRAMES frames.
+field_dims   = FieldDims(length_m=105.0, width_m=68.0)
+converter    = PixelToField(H=None, width=width, height=height, field=field_dims)
+chunk_meta   = ChunkMetadata(
+    fps=fps_lectura,
+    width=width,
+    height=height,
+    field_length_m=field_dims.length_m,
+    field_width_m=field_dims.width_m,
+    homography=None,    # placeholder; se completa en etapa 2 con cv2
+)
+chunk_writer = ChunkWriter(
+    match_id=MATCH_ID,
+    output_dir=CHUNKS_DIR,
+    metadata=chunk_meta,
+    chunk_frames=CHUNK_FRAMES,
+)
 
 # =============================================================
 # 6. FUNCIONES
@@ -366,6 +400,17 @@ try:
                     'x1': x1, 'y1': y1, 'x2': x2, 'y2': y2,
                     'en_oclusion': False
                 })
+                chunk_writer.add_player(
+                    frame=frame_count,
+                    track_id=nuestro_id,
+                    team=TEAM_BY_ID.get(nuestro_id, 'unknown'),
+                    x=cx, y=cy,
+                    bbox=(x1, y1, x2, y2),
+                    confidence=None,  # el track de boxmot no expone conf por defecto
+                    in_occlusion=False,
+                    converter=converter,
+                )
+                chunk_writer.maybe_flush()
         else:
             frames_sin_tracks += 1
 
@@ -389,6 +434,12 @@ try:
                 'frame': frame_count,
                 'x': bcx, 'y': bcy
             })
+            chunk_writer.add_ball(
+                frame=frame_count,
+                x=bcx, y=bcy,
+                confidence=mejor_track[5],
+                converter=converter,
+            )
 
         # ── HUD ────────────────────────────────────────────────
         ids_asignados = MAX_JUGADORES - len(pool_disponible) - len(ids_estaticos)
@@ -431,25 +482,53 @@ finally:
     print(f"Frames sin tracks:         {frames_sin_tracks}")
     print(f"IDs estáticos descartados: {len(ids_estaticos)} → {sorted(ids_estaticos)}")
 
+    # --- Volcar el ultimo chunk pendiente ---
+    last_chunk = None
+    try:
+        last_chunk = chunk_writer.close()
+        if last_chunk is not None:
+            print(f"\nUltimo chunk escrito: {last_chunk}")
+    except Exception as e:
+        print(f"\nError al cerrar el chunk writer: {e}")
+
+    # --- Escribir match.json con metadatos del partido ---
+    match_summary_path = CHUNKS_DIR / MATCH_ID / 'match.json'
+    match_summary = {
+        'match_id':       MATCH_ID,
+        'home_team':      None,
+        'away_team':      None,
+        'match_date':     None,
+        'venue':          None,
+        'home_score':     0,
+        'away_score':     0,
+        'duration_seconds': (frame_count - frame_inicio) / fps_lectura if fps_lectura else None,
+        'fps':            float(fps_lectura) if fps_lectura else None,
+        'width':          int(width),
+        'height':         int(height),
+        'field_length_m': field_dims.length_m,
+        'field_width_m':  field_dims.width_m,
+        'homography':     None,
+        'notes':          'Generado por tracking.py - etapa 1',
+    }
+    match_summary_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(match_summary_path, 'w', encoding='utf-8') as f:
+        json.dump(match_summary, f, ensure_ascii=False, indent=2)
+    print(f"match.json en: {match_summary_path.resolve()}")
+
+    # Listado de chunks emitidos
+    chunks_dir = CHUNKS_DIR / MATCH_ID
+    chunks_list = sorted(chunks_dir.glob('chunk_*.json'))
+    print(f"Chunks emitidos: {len(chunks_list)} en {chunks_dir.resolve()}")
+
     if datos_tracking:
         df = pd.DataFrame(datos_tracking)
         df = df[~df['id'].isin(ids_estaticos)]
-        csv_path = output_dir / 'datos_finales_tesis.csv'
-        df.to_csv(str(csv_path), index=False)
         print(f"\nIDs únicos jugadores: {df['id'].nunique()}")
         print(f"Registros jugadores:  {len(df)}")
-        print(f"CSV en: {csv_path.resolve()}")
         print("\nFrames visibles por ID:")
         print(df.groupby('id').size().sort_values(ascending=False).to_string())
 
-    if pos_pelota_historial:
-        df_pelota = pd.DataFrame(pos_pelota_historial)
-        csv_pelota = output_dir / 'pelota_tesis.csv'
-        df_pelota.to_csv(str(csv_pelota), index=False)
-        print(f"\nFrames con pelota detectada: {len(df_pelota)}")
-        print(f"CSV pelota en: {csv_pelota.resolve()}")
-    else:
-        print("\n⚠ Pelota no detectada — YOLOv8m con cámara lejana tiene dificultades")
-        print("  Considerá fine-tunear el modelo con imágenes de tu cancha")
+    if not pos_pelota_historial:
+        print("\nPelota no detectada en este partido.")
 
     print("====================================")
