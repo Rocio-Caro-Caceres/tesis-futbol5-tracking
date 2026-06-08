@@ -100,7 +100,7 @@ def central_moving_average(
         with np.errstate(invalid="ignore", divide="ignore"):
             means = np.where(
                 nan_count <= (w - minp),
-                np.nansum(windows, axis=1) / w,
+                np.nanmean(windows, axis=1),
                 np.nan,
             )
         out[k_left : k_left + n_valid] = means

@@ -58,9 +58,11 @@ def _central_diff_1d(
     Devuelve (vel, acc) con NaN en los bordes.
 
         vel[i] = (series[i+1] - series[i-1]) / (t[i+1] - t[i-1])
-        acc[i] = (vel[i+1]   - vel[i-1])   / (t[i+1] - t[i-1])
+        acc[i] = d(vel)/dt  (via np.gradient, central O(h^2) en interior)
 
-    vel tiene datos en [1, n-2], acc en [2, n-3].
+    vel tiene datos en [1, n-2]; acc combina NaN de vel con el resultado
+    de np.gradient (diferencias de primer orden en los bordes, que
+    quedan NaN porque vel[0] y vel[n-1] lo son).
     """
     n = series.size
     vel = np.full(n, np.nan, dtype=np.float64)
@@ -72,11 +74,10 @@ def _central_diff_1d(
     valid_dt = dt_total > 0
     vel[1:-1] = np.where(valid_dt, (series[2:] - series[:-2]) / dt_total, np.nan)
 
-    if n >= 4:
-        # Para la aceleracion necesitamos vel[i+1] y vel[i-1]; ambos son
-        # validos cuando i esta en [2, n-3].
-        vel_diff = vel[2:] - vel[:-2]
-        acc[1:-1] = np.where(valid_dt, vel_diff / dt_total, np.nan)
+    # Aceleracion via np.gradient: diferencias centrales O(h^2) en el
+    # interior; bordes con diferencias de primer orden (quedan NaN porque
+    # vel[0] / vel[n-1] son NaN).
+    acc[:] = np.gradient(vel, t)
     return vel, acc
 
 

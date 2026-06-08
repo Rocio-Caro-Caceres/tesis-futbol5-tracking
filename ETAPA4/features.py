@@ -131,14 +131,11 @@ def _extract_track_in_window(
         positions[idx, 1] = float(r.y_m)
         present[idx] = True
 
-    # Forward fill: si el track estaba en frame 100 pero no en 101, usa 100.
+    # Bidirectional fill: cubre NaNs en ambos bordes de la ventana.
     if n > 1:
-        last = positions[0].copy()
-        for i in range(n):
-            if not np.isnan(positions[i, 0]):
-                last = positions[i]
-            elif i > 0:
-                positions[i] = last
+        pdf = pd.DataFrame(positions)
+        pdf = pdf.ffill().bfill()
+        positions = pdf.to_numpy()
     return positions, present
 
 
@@ -162,13 +159,11 @@ def _extract_ball_in_window(
         positions[idx, 0] = float(r.x_m)
         positions[idx, 1] = float(r.y_m)
         present[idx] = True
+    # Bidirectional fill: cubre NaNs en ambos bordes de la ventana.
     if n > 1:
-        last = positions[0].copy()
-        for i in range(n):
-            if not np.isnan(positions[i, 0]):
-                last = positions[i]
-            elif i > 0:
-                positions[i] = last
+        pdf = pd.DataFrame(positions)
+        pdf = pdf.ffill().bfill()
+        positions = pdf.to_numpy()
     return positions, present
 
 
@@ -371,6 +366,7 @@ def build_features(
         X_seq: np.ndarray (N, T, F) listo para LSTM (con NaN rellenados a 0).
         X_flat: np.ndarray (N, T*F + 5*F) listo para XGBoost.
         meta_df: pd.DataFrame con una fila por evento (label, match, etc.).
+        mask_seq: np.ndarray (N, T, bool) mascara de presencia del actor por frame.
     """
     global FEATURE_NAMES
     FEATURE_NAMES = _build_feature_names(cfg.top_k_neighbors)
@@ -401,6 +397,7 @@ def build_features(
         enriched_tracking[mid] = etdf
 
     X_seq = np.zeros((len(events_df), T, n_features), dtype=np.float32)
+    mask_seq = np.zeros((len(events_df), T), dtype=bool)
     X_flat_rows: list[np.ndarray] = []
     meta_rows: list[dict[str, Any]] = []
     skipped = 0
@@ -483,6 +480,7 @@ def build_features(
         # Tambien sustituimos inf.
         feats = np.nan_to_num(feats, nan=0.0, posinf=0.0, neginf=0.0)
         X_seq[i] = feats
+        mask_seq[i] = actor_present
 
         # XGBoost: flat + summary (mean/std/min/max/last por columna)
         flat = feats.reshape(-1)
@@ -517,8 +515,8 @@ def build_features(
     meta_df = pd.DataFrame(meta_rows)
 
     info(f"features: {len(meta_df)} muestras listas ({skipped} saltadas por falta de tracking)")
-    info(f"   X_seq shape={X_seq.shape}  X_flat shape={X_flat.shape}  F={n_features} T={T}")
-    return X_seq, X_flat, meta_df
+    info(f"   X_seq shape={X_seq.shape}  X_flat shape={X_flat.shape}  mask_seq shape={mask_seq.shape}  F={n_features} T={T}")
+    return X_seq, X_flat, meta_df, mask_seq
 
 
 # ---------------------------------------------------------------------------
@@ -593,12 +591,13 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     with stage("build-features"):
-        X_seq, X_flat, meta_df = build_features(events_df, tracking, cfg)
+        X_seq, X_flat, meta_df, mask_seq = build_features(events_df, tracking, cfg)
 
     out = Path(args.output_dir)
     out.mkdir(parents=True, exist_ok=True)
     np.save(out / "X_seq.npy", X_seq)
     np.save(out / "X_flat.npy", X_flat)
+    np.save(out / "mask_seq.npy", mask_seq)
     write_parquet(meta_df, out / "meta.parquet")
     # Guardar nombres de features para interpretabilidad
     from .io_utils import write_json

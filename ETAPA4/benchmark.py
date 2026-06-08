@@ -31,6 +31,7 @@ def run_benchmark(
     meta: pd.DataFrame,
     out_dir: Path,
     cfg: TrainConfig,
+    frame_mask: np.ndarray | None = None,
 ) -> dict[str, Any]:
     out_dir.mkdir(parents=True, exist_ok=True)
     out: dict[str, Any] = {"xgb": None, "lstm": None}
@@ -47,7 +48,7 @@ def run_benchmark(
     from .train_lstm import train_lstm
     with stage("benchmark-lstm"):
         t0 = time.perf_counter()
-        out["lstm"] = train_lstm(X_seq, meta, cfg)
+        out["lstm"] = train_lstm(X_seq, meta, cfg, frame_mask=frame_mask)
         out["lstm"]["wallclock_s"] = time.perf_counter() - t0
     write_json(out_dir / "lstm_metrics.json", out["lstm"])
 
@@ -108,7 +109,10 @@ def main(argv: list[str] | None = None) -> int:
     X_seq  = np.load(fd / "X_seq.npy")
     X_flat = np.load(fd / "X_flat.npy")
     meta   = pd.read_parquet(fd / "meta.parquet")
-    info(f"Cargados X_seq={X_seq.shape}  X_flat={X_flat.shape}  meta={len(meta)}")
+    mask_path = fd / "mask_seq.npy"
+    frame_mask = np.load(mask_path) if mask_path.exists() else None
+    info(f"Cargados X_seq={X_seq.shape}  X_flat={X_flat.shape}  meta={len(meta)}"
+         + (f"  mask_seq={frame_mask.shape}" if frame_mask is not None else "  sin mask_seq"))
 
-    run_benchmark(X_seq, X_flat, meta, Path(args.output_dir), cfg)
+    run_benchmark(X_seq, X_flat, meta, Path(args.output_dir), cfg, frame_mask=frame_mask)
     return 0

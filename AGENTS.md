@@ -10,10 +10,8 @@ Compact reference for OpenCode sessions on this Windows-first tesis repo
   and prints which it picked). `METRICAS` and `ETAPA4` are pure
   NumPy/PyTorch and CPU-friendly.
 - Branch: `fran` (active); `origin/HEAD` → `develop`.
-- **No pytest/ruff/mypy/CI.** Smoke tests are stand-alone scripts under
-  `/tmp/opencode/smoke_*.py` (see bottom).
-- `LaurieOnTracking repo/` is read-only reference code (Laurie Shaw /
-  Friends of Tracking Metrica-Sports tutorial). Do not modify.
+- **No pytest/ruff/mypy/CI.**
+- `LaurieOnTracking repo/` is read-only reference code. Do not modify.
 - **README is stale** — only documents Etapa 1.
 
 ## Routing (which file owns what)
@@ -71,16 +69,16 @@ data prefer flow 4.
   `--rebuild-tracking` is destructive (truncates `tracking_events` +
   `loaded_chunks`); asks for typed confirmation, don't bypass.
 - **`METRICAS/`:**
-  - `FieldDims(length_m=105.0, width_m=68.0)` is the FIFA 11-a-side
-    default everywhere (README claims futsal 42×25 — that's marketing,
-    pass `FieldDims(42, 25)` explicitly when you actually need futsal).
+  - `FieldDims(length_m=105.0, width_m=68.0)` is FIFA 11-a-side
+    default (README claims futsal 42×25 — that's stale, pass
+    `FieldDims(42, 25)` explicitly for futsal).
   - `DEFAULT_MAX_SPEED_MPS = 12.0` in `kinematics.py:40` (Laurie cap;
     set to 0 to disable).
   - `DEFAULT_MIN_STEP_M = 0.03` in `distance.py:22` (static-player
     threshold).
   - `PipelineConfig.field_dims` / `EventsConfig.field_dims` are the
     canonical attributes (`.field` is a property alias kept for compat).
-- **`ETAPA4/` (see `ETAPA4/config.py` for the full list):**
+- **`ETAPA4/` (see `ETAPA4/config.py`):**
   - `DownloadConfig.password = "s0cc3rn3t"` (SoccerNet academic default).
   - `NormalizeConfig.fps = 25.0`, `tracking_normalized = True`
     (SoccerNet positions are in [0, 1]).
@@ -154,9 +152,14 @@ data prefer flow 4.
   velocity, which comes from `_compute_kinematics` via central diffs.
 - **No video guard**: `soccernet_io.download` raises if
   `DownloadConfig.files` contains `.mp4`. Keep the guard.
+- **Features pipeline emits `mask_seq.npy`**: a per-frame boolean mask
+  `(N, T)` tracking actor presence in each window. `train-lstm` and
+  `benchmark` load it if present; fall back to `x.abs().sum() > 0` if
+  missing (backward compat).
 - New table `event_training_labels` lives in
-  `db/sql/05_etapa4_labels.sql`; same `psql -f` rule as the other
-  schema files.
+  `db/sql/05_etapa4_labels.sql`; `ml_performance_logs` in
+  `db/sql/06_ml_performance.sql`. Same `psql -f` rule as the
+  other schema files.
 
 ## Dev commands (canonical order)
 
@@ -184,25 +187,15 @@ python -m ETAPA4 train-lstm --features-dir ETAPA4_data/features --output-dir ETA
 python -m ETAPA4 benchmark  --features-dir ETAPA4_data/features --output-dir ETAPA4_data/models
 ```
 
-## Smoke tests
-
-Plain Python (not pytest) scripts outside the repo at
-`/tmp/opencode/smoke_metricas.py`, `smoke_etapa3.py`, `smoke_etapa4.py`.
-Each `sys.path.insert(0, REPO_ROOT)` and runs on synthetic data with
-no network, no DB, no GPU:
-
-```bash
-python3 /tmp/opencode/smoke_metricas.py   # Etapa 2 modules
-python3 /tmp/opencode/smoke_etapa3.py     # FSM + geometric events
-python3 /tmp/opencode/smoke_etapa4.py     # features + XGB + LSTM
-```
-
 ## WSL vs Windows
 
 - Repo lives on Windows (`/mnt/c/...`); bundled `.venv/` is a Windows
   venv (`Scripts\python.exe`). From WSL, either use PowerShell on the
   Windows side, or create a fresh Linux venv: `python3 -m venv
   .venv-wsl` (don't commit it).
+- `.gitignore` lists `venv/` (no dot) but the committed venv is
+  `.venv/` — new files there WILL be tracked. Either extend gitignore
+  or use `pip install -r requirements*.txt` outside `.venv`.
 - `tracking.py` reads absolute Windows paths. WSL can read the
   codebase but not the video file. Run `tracking.py` from PowerShell.
 
@@ -213,7 +206,6 @@ python3 /tmp/opencode/smoke_etapa4.py     # features + XGB + LSTM
   `__pycache__/`, `ETAPA4_data/`, `data/soccernet/`, or `*.csv`. Use
   an output dir outside the repo (e.g. `out/`) for heatmap `.npz`
   files (not covered by `.gitignore`).
-- Add pytest/ruff/mypy config from scratch — the project has none, and
-  the team prefers smoke tests.
+- Add pytest/ruff/mypy config from scratch — the project has none.
 - Bypass `--rebuild-tracking` confirmation, or change `MAX_JUGADORES`
   / `DIST_MAX_REID` / `IOU_OCLUSION` without asking.

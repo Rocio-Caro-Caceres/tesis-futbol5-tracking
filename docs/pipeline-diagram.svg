@@ -1,0 +1,248 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1400" font-family="Segoe UI, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#555"/>
+    </marker>
+    <linearGradient id="hdr" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1a1a2e"/>
+      <stop offset="100%" stop-color="#16213e"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="1400" fill="#f8f9fa" rx="8"/>
+
+  <!-- Header -->
+  <rect x="0" y="0" width="1200" height="70" fill="url(#hdr)"/>
+  <text x="600" y="30" text-anchor="middle" fill="#fff" font-size="22" font-weight="bold">Pipeline Completo — Tesis Fútbol 5 Tracking</text>
+  <text x="600" y="52" text-anchor="middle" fill="#aaa" font-size="13">branch: fran · 2026-06-08 · Python 3.14</text>
+
+  <!-- ============================================ -->
+  <!-- ETAPA 1 — TRACKING -->
+  <!-- ============================================ -->
+  <rect x="30" y="90" width="740" height="260" fill="#d0ebff" stroke="#1971c2" stroke-width="2" rx="8" opacity="0.5"/>
+  <text x="50" y="120" fill="#1971c2" font-size="18" font-weight="bold">Etapa 1 — Video Tracking</text>
+  <text x="50" y="142" fill="#1971c2" font-size="13" font-family="monospace">tracking.py · YOLOv8m + ByteTrack + Re-ID</text>
+
+  <!-- E1 boxes -->
+  <rect x="60" y="170" width="130" height="45" fill="#fff" stroke="#1971c2" stroke-width="1.5" rx="6"/>
+  <text x="125" y="197" text-anchor="middle" fill="#1971c2" font-size="13">🎬 Video .mp4</text>
+
+  <rect x="230" y="170" width="130" height="45" fill="#a5d8ff" stroke="#1971c2" stroke-width="1.5" rx="6"/>
+  <text x="295" y="197" text-anchor="middle" fill="#1971c2" font-size="12">YOLOv8m</text>
+
+  <rect x="400" y="170" width="130" height="45" fill="#a5d8ff" stroke="#1971c2" stroke-width="1.5" rx="6"/>
+  <text x="465" y="197" text-anchor="middle" fill="#1971c2" font-size="12">ByteTrack ×2</text>
+
+  <rect x="570" y="170" width="130" height="45" fill="#a5d8ff" stroke="#1971c2" stroke-width="1.5" rx="6"/>
+  <text x="635" y="197" text-anchor="middle" fill="#1971c2" font-size="12">Re-ID + oclusión</text>
+
+  <!-- E1 arrows -->
+  <line x1="190" y1="192" x2="225" y2="192" stroke="#1971c2" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="360" y1="192" x2="395" y2="192" stroke="#1971c2" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="530" y1="192" x2="565" y2="192" stroke="#1971c2" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- E1 outputs -->
+  <rect x="80" y="260" width="160" height="40" fill="#fff" stroke="#1971c2" stroke-width="1.5" rx="6"/>
+  <text x="160" y="285" text-anchor="middle" fill="#1971c2" font-size="12">📄 CSV legacy</text>
+
+  <rect x="290" y="260" width="160" height="40" fill="#fff" stroke="#1971c2" stroke-width="1.5" rx="6"/>
+  <text x="370" y="285" text-anchor="middle" fill="#1971c2" font-size="12">📦 JSON chunks</text>
+
+  <rect x="500" y="260" width="160" height="40" fill="#fff" stroke="#1971c2" stroke-width="1.5" rx="6"/>
+  <text x="580" y="285" text-anchor="middle" fill="#1971c2" font-size="12">🎥 Video anotado</text>
+
+  <line x1="125" y1="215" x2="160" y2="255" stroke="#1971c2" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="465" y1="215" x2="370" y2="255" stroke="#1971c2" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="635" y1="215" x2="580" y2="255" stroke="#1971c2" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Cross-etapa arrow: CSV legacy → Etapa 3 -->
+  <path d="M 160 300 L 160 530" stroke="#888" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#arrow)" fill="none"/>
+  <text x="175" y="420" fill="#888" font-size="11">CSV → flujo offline</text>
+
+  <!-- Cross-etapa arrow: JSON chunks → Etapa 2 -->
+  <path d="M 370 300 L 370 370" stroke="#888" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#arrow)" fill="none"/>
+  <text x="385" y="340" fill="#888" font-size="11">JSON → DB</text>
+
+  <!-- ============================================ -->
+  <!-- ETAPA 2 — DB INGESTION -->
+  <!-- ============================================ -->
+  <rect x="30" y="380" width="740" height="200" fill="#b2f2bb" stroke="#2f9e44" stroke-width="2" rx="8" opacity="0.5"/>
+  <text x="50" y="410" fill="#2f9e44" font-size="18" font-weight="bold">Etapa 2 — DB Ingestion</text>
+  <text x="50" y="432" fill="#2f9e44" font-size="13" font-family="monospace">scripts/ingest.py · psycopg · TimescaleDB + PostGIS</text>
+
+  <!-- E2 flow -->
+  <rect x="60" y="460" width="130" height="45" fill="#fff" stroke="#2f9e44" stroke-width="1.5" rx="6"/>
+  <text x="125" y="487" text-anchor="middle" fill="#2f9e44" font-size="12">📦 JSON chunks</text>
+
+  <rect x="250" y="460" width="140" height="45" fill="#d3f9d8" stroke="#2f9e44" stroke-width="1.5" rx="6"/>
+  <text x="320" y="480" text-anchor="middle" fill="#2f9e44" font-size="11">ingest.py</text>
+  <text x="320" y="496" text-anchor="middle" fill="#2f9e44" font-size="10">idempotente</text>
+
+  <rect x="460" y="450" width="280" height="110" fill="#ebfbee" stroke="#2f9e44" stroke-width="1.5" rx="6"/>
+  <text x="475" y="472" fill="#2f9e44" font-size="12" font-weight="bold">PostgreSQL + TimescaleDB + PostGIS</text>
+  <text x="475" y="492" fill="#2f9e44" font-size="11">├─ tracking_events (hypertable)</text>
+  <text x="475" y="510" fill="#2f9e44" font-size="11">├─ match_summary · game_events</text>
+  <text x="475" y="528" fill="#2f9e44" font-size="11">├─ loaded_chunks (idempotencia)</text>
+  <text x="475" y="546" fill="#2f9e44" font-size="11">├─ event_training_labels</text>
+  <text x="475" y="562" fill="#2f9e44" font-size="11">└─ ml_performance_logs</text>
+
+  <line x1="190" y1="482" x2="245" y2="482" stroke="#2f9e44" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="390" y1="482" x2="455" y2="482" stroke="#2f9e44" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- ============================================ -->
+  <!-- ETAPA 3 — METRICAS -->
+  <!-- ============================================ -->
+  <rect x="30" y="620" width="740" height="340" fill="#ffe8cc" stroke="#e8590c" stroke-width="2" rx="8" opacity="0.5"/>
+  <text x="50" y="650" fill="#e8590c" font-size="18" font-weight="bold">Etapa 3 — Kinematic Metrics</text>
+  <text x="50" y="672" fill="#e8590c" font-size="13" font-family="monospace">python -m METRICAS · NumPy/PyTorch · CPU-friendly</text>
+
+  <!-- E3 pipeline stages -->
+  <text x="60" y="705" fill="#e8590c" font-size="13" font-weight="bold">Pipeline base:</text>
+
+  <rect x="60" y="720" width="110" height="35" fill="#fff" stroke="#e8590c" stroke-width="1.5" rx="6"/>
+  <text x="115" y="742" text-anchor="middle" fill="#e8590c" font-size="11">📄 CSV input</text>
+
+  <rect x="200" y="720" width="110" height="35" fill="#ffe8cc" stroke="#e8590c" stroke-width="1.5" rx="6"/>
+  <text x="255" y="742" text-anchor="middle" fill="#e8590c" font-size="11">Smoothing</text>
+  <text x="255" y="754" text-anchor="middle" fill="#e8590c" font-size="9">CMA w=5</text>
+
+  <rect x="340" y="720" width="110" height="35" fill="#ffe8cc" stroke="#e8590c" stroke-width="1.5" rx="6"/>
+  <text x="395" y="742" text-anchor="middle" fill="#e8590c" font-size="11">Kinematics</text>
+  <text x="395" y="754" text-anchor="middle" fill="#e8590c" font-size="9">v, a central diff</text>
+
+  <rect x="480" y="720" width="110" height="35" fill="#ffe8cc" stroke="#e8590c" stroke-width="1.5" rx="6"/>
+  <text x="535" y="742" text-anchor="middle" fill="#e8590c" font-size="11">Distance</text>
+  <text x="535" y="754" text-anchor="middle" fill="#e8590c" font-size="9">cumdist</text>
+
+  <rect x="620" y="720" width="110" height="35" fill="#ffe8cc" stroke="#e8590c" stroke-width="1.5" rx="6"/>
+  <text x="675" y="742" text-anchor="middle" fill="#e8590c" font-size="11">Heatmap</text>
+  <text x="675" y="754" text-anchor="middle" fill="#e8590c" font-size="9">.npz / .csv</text>
+
+  <line x1="170" y1="737" x2="195" y2="737" stroke="#e8590c" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="310" y1="737" x2="335" y2="737" stroke="#e8590c" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="450" y1="737" x2="475" y2="737" stroke="#e8590c" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="590" y1="737" x2="615" y2="737" stroke="#e8590c" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- E3 optional modules -->
+  <text x="60" y="795" fill="#e8590c" font-size="13" font-weight="bold">Módulos opcionales (--possession --events):</text>
+
+  <rect x="100" y="810" width="160" height="35" fill="#ffec99" stroke="#e8590c" stroke-width="1.5" rx="6"/>
+  <text x="180" y="832" text-anchor="middle" fill="#e8590c" font-size="12">⏱ Possession FSM</text>
+
+  <rect x="300" y="810" width="160" height="35" fill="#ffec99" stroke="#e8590c" stroke-width="1.5" rx="6"/>
+  <text x="380" y="832" text-anchor="middle" fill="#e8590c" font-size="12">⚽ Eventos gol/atajada</text>
+
+  <line x1="260" y1="737" x2="180" y2="805" stroke="#e8590c" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+  <line x1="460" y1="737" x2="380" y2="805" stroke="#e8590c" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+
+  <!-- E3 outputs -->
+  <rect x="60" y="875" width="680" height="75" fill="#fff4e6" stroke="#e8590c" stroke-width="1.5" rx="6"/>
+  <text x="80" y="895" fill="#e8590c" font-size="12" font-weight="bold">Salidas:</text>
+  <text x="80" y="913" fill="#e8590c" font-size="11">├─ players_metrics.csv · summary_per_track.csv · summary_match.json</text>
+  <text x="80" y="931" fill="#e8590c" font-size="11">├─ heatmaps/{id}.npz · possession_timeline.csv · possession_spells.csv</text>
+  <text x="80" y="948" fill="#e8590c" font-size="11">└─ events.csv · goals.csv · saves.csv</text>
+
+  <!-- ============================================ -->
+  <!-- ETAPA 4 — SOCCERNET ML (independiente) -->
+  <!-- ============================================ -->
+  <rect x="30" y="1000" width="740" height="340" fill="#f3d9fa" stroke="#9c36b5" stroke-width="2" rx="8" opacity="0.5"/>
+  <text x="50" y="1030" fill="#9c36b5" font-size="18" font-weight="bold">Etapa 4 — SoccerNet ML</text>
+  <text x="50" y="1052" fill="#9c36b5" font-size="13" font-family="monospace">python -m ETAPA4 · XGBoost + LSTM · independiente (no requiere DB ni GPU)</text>
+
+  <!-- E4 pipeline -->
+  <rect x="60" y="1080" width="130" height="45" fill="#fff" stroke="#9c36b5" stroke-width="1.5" rx="6"/>
+  <text x="125" y="1102" text-anchor="middle" fill="#9c36b5" font-size="11">⬇ Download</text>
+  <text x="125" y="1118" text-anchor="middle" fill="#9c36b5" font-size="9">SoccerNet API</text>
+
+  <rect x="230" y="1080" width="130" height="45" fill="#f3d9fa" stroke="#9c36b5" stroke-width="1.5" rx="6"/>
+  <text x="295" y="1102" text-anchor="middle" fill="#9c36b5" font-size="11">Normalize</text>
+  <text x="295" y="1118" text-anchor="middle" fill="#9c36b5" font-size="9">→ Parquet</text>
+
+  <rect x="400" y="1080" width="130" height="45" fill="#f3d9fa" stroke="#9c36b5" stroke-width="1.5" rx="6"/>
+  <text x="465" y="1102" text-anchor="middle" fill="#9c36b5" font-size="11">Features</text>
+  <text x="465" y="1118" text-anchor="middle" fill="#9c36b5" font-size="9">→ .npy</text>
+
+  <rect x="570" y="1080" width="150" height="45" fill="#ebd5f5" stroke="#9c36b5" stroke-width="1.5" rx="6"/>
+  <text x="645" y="1100" text-anchor="middle" fill="#9c36b5" font-size="11">train-xgb</text>
+  <text x="645" y="1118" text-anchor="middle" fill="#9c36b5" font-size="11">train-lstm</text>
+
+  <line x1="190" y1="1102" x2="225" y2="1102" stroke="#9c36b5" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="360" y1="1102" x2="395" y2="1102" stroke="#9c36b5" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="530" y1="1102" x2="565" y2="1102" stroke="#9c36b5" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- E4 benchmark -->
+  <rect x="230" y="1155" width="150" height="40" fill="#ebd5f5" stroke="#9c36b5" stroke-width="1.5" rx="6"/>
+  <text x="305" y="1180" text-anchor="middle" fill="#9c36b5" font-size="12">benchmark → metrics.json</text>
+  <line x1="645" y1="1125" x2="305" y2="1150" stroke="#9c36b5" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- E4 details -->
+  <rect x="60" y="1220" width="680" height="105" fill="#f8f0fc" stroke="#9c36b5" stroke-width="1.5" rx="6"/>
+  <text x="80" y="1245" fill="#9c36b5" font-size="12" font-weight="bold">Detalles:</text>
+  <text x="80" y="1265" fill="#9c36b5" font-size="11">• Targets: Pass / Duel / Foul (TARGET_LABELS)</text>
+  <text x="80" y="1283" fill="#9c36b5" font-size="11">• Split by match (no frame leakage — train_xgb mezcla match_id)</text>
+  <text x="80" y="1301" fill="#9c36b5" font-size="11">• Away jersey offset +100 · match_id sintético &lt;slug&gt;__h1/__h2</text>
+  <text x="80" y="1319" fill="#9c36b5" font-size="11">• No descarga video · Contraseña académica: s0cc3rn3t</text>
+
+  <!-- ============================================ -->
+  <!-- LEGEND / SIDEBAR -->
+  <!-- ============================================ -->
+  <rect x="800" y="90" width="370" height="1250" fill="#fff" stroke="#ccc" stroke-width="1" rx="8"/>
+  <text x="985" y="120" text-anchor="middle" fill="#333" font-size="16" font-weight="bold">Leyenda</text>
+
+  <!-- Color key -->
+  <rect x="820" y="140" width="20" height="20" fill="#d0ebff" stroke="#1971c2" stroke-width="1.5" rx="3"/>
+  <text x="850" y="156" fill="#333" font-size="13">Etapa 1 — Tracking (requiere GPU + Windows)</text>
+
+  <rect x="820" y="170" width="20" height="20" fill="#b2f2bb" stroke="#2f9e44" stroke-width="1.5" rx="3"/>
+  <text x="850" y="186" fill="#333" font-size="13">Etapa 2 — DB Ingestion (requiere PostgreSQL)</text>
+
+  <rect x="820" y="200" width="20" height="20" fill="#ffe8cc" stroke="#e8590c" stroke-width="1.5" rx="3"/>
+  <text x="850" y="216" fill="#333" font-size="13">Etapa 3 — Kinematic Metrics (CPU-only ✅ probado)</text>
+
+  <rect x="820" y="230" width="20" height="20" fill="#f3d9fa" stroke="#9c36b5" stroke-width="1.5" rx="3"/>
+  <text x="850" y="246" fill="#333" font-size="13">Etapa 4 — SoccerNet ML (independiente)</text>
+
+  <line x1="800" y1="260" x2="1170" y2="260" stroke="#ddd" stroke-width="1"/>
+
+  <text x="985" y="290" text-anchor="middle" fill="#333" font-size="14" font-weight="bold">Issues conocidos</text>
+  <text x="820" y="315" fill="#d00" font-size="12">⚠️ tracking.py: rutas hardcodeadas</text>
+  <text x="820" y="335" fill="#d00" font-size="12">⚠️ TEAM_BY_ID = {} — sin detección de equipos</text>
+  <text x="820" y="355" fill="#d00" font-size="12">⚠️ Homografía identidad — x_m no son metros reales</text>
+  <text x="820" y="375" fill="#d00" font-size="12">⚠️ README desactualizado (ver AGENTS.md)</text>
+
+  <line x1="800" y1="390" x2="1170" y2="390" stroke="#ddd" stroke-width="1"/>
+
+  <text x="985" y="420" text-anchor="middle" fill="#333" font-size="14" font-weight="bold">Comandos rápidos</text>
+
+  <text x="820" y="450" fill="#333" font-size="12" font-weight="bold">Etapa 3:</text>
+  <text x="820" y="470" fill="#555" font-size="11" font-family="monospace">python -m METRICAS \</text>
+  <text x="820" y="486" fill="#555" font-size="11" font-family="monospace">  --input tracking.csv \</text>
+  <text x="820" y="502" fill="#555" font-size="11" font-family="monospace">  --output-dir out/ \</text>
+  <text x="820" y="518" fill="#555" font-size="11" font-family="monospace">  --field-length 42 \</text>
+  <text x="820" y="534" fill="#555" font-size="11" font-family="monospace">  --field-width 25 \</text>
+  <text x="820" y="550" fill="#555" font-size="11" font-family="monospace">  --possession --events</text>
+
+  <text x="820" y="580" fill="#333" font-size="12" font-weight="bold">Etapa 4:</text>
+  <text x="820" y="600" fill="#555" font-size="11" font-family="monospace">python -m ETAPA4 download \</text>
+  <text x="820" y="616" fill="#555" font-size="11" font-family="monospace">  --output-dir data/soccernet</text>
+  <text x="820" y="636" fill="#555" font-size="11" font-family="monospace">python -m ETAPA4 normalize \</text>
+  <text x="820" y="652" fill="#555" font-size="11" font-family="monospace">  --raw-dir data/soccernet</text>
+  <text x="820" y="672" fill="#555" font-size="11" font-family="monospace">python -m ETAPA4 features ...</text>
+  <text x="820" y="692" fill="#555" font-size="11" font-family="monospace">python -m ETAPA4 train-xgb ...</text>
+
+  <line x1="800" y1="710" x2="1170" y2="710" stroke="#ddd" stroke-width="1"/>
+
+  <text x="985" y="740" text-anchor="middle" fill="#333" font-size="14" font-weight="bold">Resultados de la prueba</text>
+  <text x="820" y="765" fill="#090" font-size="12">✅ METRICAS: End-to-end OK</text>
+  <text x="825" y="785" fill="#555" font-size="11">2640 filas sintéticas (10s @ 24fps)</text>
+  <text x="825" y="805" fill="#555" font-size="11">11 tracks · 6 heatmaps · possession OK</text>
+  <text x="825" y="825" fill="#555" font-size="11">eventos: 0 goles (esperado sin arco)</text>
+
+  <text x="820" y="855" fill="#090" font-size="12">✅ ETAPA4: Todos los módulos importan</text>
+  <text x="820" y="885" fill="#090" font-size="12">✅ tracking/: Imports OK</text>
+  <text x="820" y="915" fill="#d00" font-size="12">❌ scripts/: necesita psycopg</text>
+
+  <text x="985" y="960" text-anchor="middle" fill="#888" font-size="11">docs/pipeline-diagram.svg</text>
+  <text x="985" y="980" text-anchor="middle" fill="#888" font-size="11">Ver también: pipeline-diagram.excalidraw</text>
+</svg>

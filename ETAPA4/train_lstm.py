@@ -42,31 +42,28 @@ def _resolve_device(device: str) -> str:
 # Dataset / DataLoader
 # ---------------------------------------------------------------------------
 class WindowDataset:
-    """Envuelve (X_seq, mask, y) sin tocar torch si no se usa."""
+    """Envuelve (X_seq, sample_mask, frame_mask, y)."""
 
-    def __init__(self, X: np.ndarray, mask: np.ndarray, y: np.ndarray):
+    def __init__(self, X: np.ndarray, sample_mask: np.ndarray, frame_mask: np.ndarray | None, y: np.ndarray):
         self.X = X.astype(np.float32)
-        self.mask = mask.astype(np.bool_)
+        self.sample_mask = sample_mask.astype(np.bool_)
+        self.frame_mask = frame_mask.astype(np.bool_) if frame_mask is not None else np.ones((len(X), X.shape[1]), dtype=bool)
         self.y = y.astype(np.int64)
 
     def __len__(self) -> int:
         return len(self.X)
 
     def __getitem__(self, idx: int):
-        return self.X[idx], self.mask[idx], self.y[idx]
+        return self.X[idx], self.frame_mask[idx], self.y[idx]
 
 
 def _build_loaders(
     X: np.ndarray, meta: pd.DataFrame, train_idx: np.ndarray, val_idx: np.ndarray,
-    batch_size: int,
+    batch_size: int, frame_mask: np.ndarray | None = None,
 ) -> tuple[Any, Any, int]:
     import torch  # type: ignore
     from torch.utils.data import DataLoader
 
-    # Mascara = `valid_frames > 0` por muestra (1 fila = 1 evento). Dentro
-    # de la ventana LSTM la atencion ignora frames con todos los features
-    # en 0 (que es como representamos los frames faltantes). La mascara a
-    # nivel de muestra es "el evento tiene al menos 1 frame util".
     y = meta["label_idx"].to_numpy()
     keep = y >= 0
     if not keep.all():
@@ -74,7 +71,8 @@ def _build_loaders(
         X = X[keep]
         y = y[keep]
         meta = meta.iloc[np.where(keep)[0]].reset_index(drop=True)
-        # Re-mapear indices (tras filtro)
+        if frame_mask is not None:
+            frame_mask = frame_mask[keep]
         train_idx = np.array([i for i, m in enumerate(keep) if m and i in set(train_idx)])
         val_idx   = np.array([i for i, m in enumerate(keep) if m and i in set(val_idx)])
 
@@ -82,8 +80,11 @@ def _build_loaders(
     if not valid.all():
         info(f"{(~valid).sum()} eventos sin frames validos: se incluyen igual (mask los ignora)")
 
-    train_ds = WindowDataset(X[train_idx], valid[train_idx], y[train_idx])
-    val_ds   = WindowDataset(X[val_idx],   valid[val_idx],   y[val_idx])
+    fm_train = frame_mask[train_idx] if frame_mask is not None else None
+    fm_val   = frame_mask[val_idx]   if frame_mask is not None else None
+
+    train_ds = WindowDataset(X[train_idx], valid[train_idx], fm_train, y[train_idx])
+    val_ds   = WindowDataset(X[val_idx],   valid[val_idx],   fm_val,   y[val_idx])
     train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=0)
     val_loader   = DataLoader(val_ds,   batch_size=batch_size, shuffle=False, num_workers=0)
     return train_loader, val_loader, int(X.shape[2])
@@ -117,16 +118,17 @@ def _build_model(n_features: int, n_classes: int, cfg: TrainConfig, device: str)
             )
             self.dropout = nn.Dropout(dropout)
 
-        def forward(self, x):
-            # x: (B, T, F). En nuestro caso el padding ya esta enmascarado
-            # rellenando a 0; para hacer la atencion mas robusta anulamos
-            # frames en los que TODAS las features son 0.
+        def forward(self, x, frame_mask=None):
+            # x: (B, T, F)
             h = self.proj(x)              # (B, T, H)
             h = self.dropout(h)
             h, _ = self.lstm(h)           # (B, T, 2H)
             a = self.attn(h).squeeze(-1)  # (B, T)
-            # Mask: un frame es "muerto" si TODOS los features son 0
-            frame_present = (x.abs().sum(dim=-1) > 0).float()
+            # Mask: frame_mask es (B, T) bool. True = frame con datos.
+            if frame_mask is None:
+                frame_present = (x.abs().sum(dim=-1) > 0).float()
+            else:
+                frame_present = frame_mask.float()
             a = a.masked_fill(frame_present == 0, -1e9)
             w = torch.softmax(a, dim=-1)
             pooled = torch.einsum("bt,btd->bd", w, h)
@@ -152,9 +154,9 @@ def _evaluate(model, loader, device) -> tuple[float, float, np.ndarray, np.ndarr
     model.eval()
     losses, all_y, all_pred = [], [], []
     with torch.no_grad():
-        for x, mask, y in loader:
+        for x, frame_mask, y in loader:
             x = x.to(device); y = y.to(device)
-            logits = model(x)
+            logits = model(x, frame_mask=frame_mask.to(device))
             loss = F.cross_entropy(logits, y, reduction="sum")
             losses.append(loss.item())
             all_y.append(y.cpu().numpy())
@@ -174,6 +176,7 @@ def train_lstm(
     X_seq: np.ndarray,
     meta_df: pd.DataFrame,
     cfg: TrainConfig,
+    frame_mask: np.ndarray | None = None,
 ) -> dict[str, Any]:
     """Entrena el LSTM y devuelve metricas + path del modelo."""
     import torch
@@ -189,7 +192,7 @@ def train_lstm(
     train_idx, val_idx = split_by_match(meta_df, cfg.val_fraction, cfg.split_seed)
 
     train_loader, val_loader, n_features = _build_loaders(
-        X_seq, meta_df, train_idx, val_idx, cfg.batch_size
+        X_seq, meta_df, train_idx, val_idx, cfg.batch_size, frame_mask=frame_mask
     )
     model = _build_model(n_features, len(TARGET_LABELS), cfg, device)
     optimizer = torch.optim.AdamW(
@@ -217,10 +220,10 @@ def train_lstm(
     for epoch in range(1, cfg.epochs + 1):
         model.train()
         ep_loss, n_batches = 0.0, 0
-        for x, mask, y in train_loader:
+        for x, frame_mask, y in train_loader:
             x = x.to(device); y = y.to(device)
             optimizer.zero_grad()
-            logits = model(x)
+            logits = model(x, frame_mask=frame_mask.to(device))
             loss = F.cross_entropy(logits, y, weight=cw)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
@@ -310,10 +313,13 @@ def main(argv: list[str] | None = None) -> int:
     fd = Path(args.features_dir)
     X_seq = np.load(fd / "X_seq.npy")
     meta  = pd.read_parquet(fd / "meta.parquet")
-    info(f"Cargados X_seq={X_seq.shape}, meta={len(meta)} filas")
+    mask_path = fd / "mask_seq.npy"
+    frame_mask = np.load(mask_path) if mask_path.exists() else None
+    info(f"Cargados X_seq={X_seq.shape}, meta={len(meta)} filas"
+         + (f", mask_seq={frame_mask.shape}" if frame_mask is not None else ", sin mask_seq"))
 
     with stage("train-lstm"):
-        metrics = train_lstm(X_seq, meta, cfg)
+        metrics = train_lstm(X_seq, meta, cfg, frame_mask=frame_mask)
 
     write_json(Path(args.output_dir) / "lstm_metrics.json", metrics)
     info(f"LSTM accuracy={metrics['accuracy']:.3f}  f1_macro={metrics['f1_macro']:.3f}")

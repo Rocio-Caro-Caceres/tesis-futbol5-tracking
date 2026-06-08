@@ -235,6 +235,7 @@ def _update_fsm(
             fsm.frames_in_state = 1
             fsm.pending_steal_team = None
             fsm.pending_steal_frames = 0
+            is_touch = True
             return fsm.possessor_team, fsm.possessor_track_id, is_touch
         fsm.frames_in_state += 1
         return fsm.possessor_team, fsm.possessor_track_id, is_touch
