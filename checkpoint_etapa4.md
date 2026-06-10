@@ -1,66 +1,53 @@
 # Checkpoint: Etapa 4 - 09-Jun-2026
 
-## Estado actual
+## Estado actual — Pipeline completo ejecutado
 
-### Dependencias instaladas (pip --break-system-packages)
-- SoccerNet (v0.1.62, sin dep resolver)
-- tqdm, requests
-- huggingface_hub (v1.16.4)
-- boto3, botocore, s3transfer, jmespath
-- google-measurement-protocol, prices
-- click (v8.4.1), typer (v0.25.1), httpx, hf-xet, httpcore, h11, anyio
+### Pipeline ejecutado de punta a punta
 
-### Faltantes (no críticos para download, sí para normalize/features/train)
-- matplotlib (para SoccerNet, no necesario para Etapa 4 propia)
-- pycocoevalcap (104 MB, timeout)
-- scikit-video
+| Paso | Estado | Output |
+|------|--------|--------|
+| `download` | OK | 39 Labels-v2.json + 57 clips MOT (9GB zip) |
+| `normalize` | OK | 57 clips → 733,002 tracking rows, 285 synthetic events |
+| `features` | OK | X_seq=(285,51,49), X_flat=(285,2744), mask_seq=(285,51) |
+| `train-xgb` | OK | acc=0.436, F1=0.282, 8.9s train, 0.37ms/sample |
+| `train-lstm` | OK | acc=0.709, F1=0.277, 9.2s train, 0.59ms/sample |
+| `benchmark` | OK | `ETAPA4_data/models/benchmark_summary.json` |
 
-### Datos descargados
+### Nota sobre metrics
+Los metrics son baseline-level porque los event labels son **synthetic** (random).
+El pipeline funciona end-to-end con datos reales de tracking MOT.
 
-#### `data/soccernet/` (via `python -m ETAPA4 download --splits train`)
-Solo **Labels-v2.json** (18 partidos de `england_epl/2014-2015` y `2015-2016`).
-Los `*_tracking.jsonl.gz` devuelven **404** — no existen en el servidor ownCloud.
+### Datos en disco
 
-#### `data/soccernet_tracking/tracking/train.zip` (via `downloadDataTask(task="tracking")`)
-157 MB, pero **formato MOT** (CSV + imágenes), NO el jsonl.gz que espera `normalize.py`.
-
-### Problema estructural
-
-El pipeline `ETAPA4/normalize.py:_track_to_atomic_rows()` espera archivos
-`*_tracking.jsonl.gz` por partido con formato:
-```json
-{"role": "player", "jersey": 10, "position": [0.5, 0.3], "frame": 123, "team": "home"}
 ```
-Ese formato ya no está disponible en el SoccerNet API actual. El tracking disponible
-via `downloadDataTask(task="tracking")` viene en formato MOT20 (CSV con 10 columnas:
-frame, track_id, bbox_x, bbox_y, width, height, conf, -1, -1, -1).
+data/soccernet/
+├── england_epl/           # 39 Labels-v2.json (3 seasons)
+└── train/                 # 57 clips MOT extraidos (SNMOT-060 a SNMOT-170)
+    ├── SNMOT-060/
+    │   ├── gt/gt.txt      # MOT20 CSV (10 cols)
+    │   ├── seqinfo.ini    # 1920x1080, 25fps, 750 frames
+    │   └── img1/          # JPEG frames
+    └── ...
 
-### Para retomar
+ETAPA4_data/
+├── normalized/            # 57 dirs, cada uno con tracking.parquet + events.parquet
+├── features/              # X_seq.npy, X_flat.npy, mask_seq.npy, meta.parquet
+└── models/                # xgb_model.json, lstm_model.pt, benchmark_summary.json
+```
 
-1. **Elegir estrategia:**
-   - (a) Adaptar `normalize.py` y `soccernet_io.py` para parsear tracking formato MOT
-   - (b) Buscar fuente alternativa de jsonl.gz (HuggingFace, o generar synthetic)
-   - (c) Probar desde PowerShell/Windows (mejor conectividad)
+### Archivos modificados
 
-2. **Comandos a ejecutar después de resolver el tracking:**
-   ```bash
-   python3 -m ETAPA4 normalize
-   python3 -m ETAPA4 features
-   python3 -m ETAPA4 train-xgb
-   python3 -m ETAPA4 train-lstm
-   python3 -m ETAPA4 benchmark
-   ```
+| Archivo | Cambios |
+|---------|---------|
+| `ETAPA4/soccernet_io.py` | +MOT reader, GameDirMot, iter_games_mot, download con downloadDataTask |
+| `ETAPA4/normalize.py` | +MOT normalizer, fix Labels-v2 format (dict/annotations), fix position field |
+| `ETAPA4/config.py` | +tracking_format field |
+| `ETAPA4/__main__.py` | +--tracking-format CLI flag |
 
-3. **Si se elige (a), editar:**
-   - `ETAPA4/soccernet_io.py` — agregar lector de tracking MOT
-   - `ETAPA4/normalize.py` — adaptar `_track_to_atomic_rows` para el formato MOT
-   - `ETAPA4/download` en `soccernet_io.py` — usar `downloadDataTask` en vez de `downloadGames`
+### Limitaciones conocidas
+- Labels-v2.json (500 broadcast games) NO matchean con tracking clips (12 games) — sin gameID mapping
+- Synthetic events creados para habilitar el pipeline completo
+- MOT: sin team info, sin jersey numbers, clips de 30s
 
-### Archivos clave
-- `ETAPA4/__init__.py` — docstring del pipeline
-- `ETAPA4/soccernet_io.py` — download + iteración de partidos
-- `ETAPA4/normalize.py` — conversión a tracking_events + training labels
-- `ETAPA4/features.py` — ventanas temporales para ML
-- `ETAPA4/train_xgb.py` / `train_lstm.py` / `benchmark.py`
-- `ETAPA4/config.py` — defaults y dataclasses
-- `requirements-etapa4.txt` — deps (SoccerNet, pandas, numpy, pyarrow, sklearn, xgboost, torch, tqdm)
+### Proximo paso
+Con event labels reales (si se obtiene el gameID mapping o Labels-v2 del tracking challenge), re-entrenar con labels verdaderos.

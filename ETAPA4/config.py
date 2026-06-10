@@ -62,6 +62,8 @@ class DownloadConfig:
     password: str = "s0cc3rn3t"
     # Si ya tenes los archivos en disco, podes saltarte la descarga.
     raw_dir: Path | None = None
+    # Formato de tracking: "mot" (MOT20 CSV, default) o "jsonl" (JSONL.GZ legacy).
+    tracking_format: str = "mot"
 
 
 # ---------------------------------------------------------------------------

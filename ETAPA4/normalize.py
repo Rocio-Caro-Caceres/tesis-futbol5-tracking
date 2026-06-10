@@ -39,7 +39,15 @@ from .config import (
     TARGET_LABELS,
 )
 from .io_utils import info, stage, warn, write_parquet
-from .soccernet_io import GameDir, iter_games, read_labels, read_tracking_jsonl
+from .soccernet_io import (
+    GameDir,
+    GameDirMot,
+    iter_games,
+    iter_games_mot,
+    read_labels,
+    read_tracking_jsonl,
+    read_tracking_mot,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -184,6 +192,10 @@ def _event_to_label_row(
     """
     Convierte un evento SoccerNet a una fila de event_training_labels.
 
+    Soporta dos formatos de Labels-v2.json:
+      1. Legacy con start/end/from/to (hipotetico).
+      2. Real: gameTime, position (frame number), team.
+
     Devuelve None si el evento no califica como Pass/Duel/Foul o si faltan
     campos minimos (half, frame).
     """
@@ -192,9 +204,22 @@ def _event_to_label_row(
     if coarse not in TARGET_LABELS:
         return None
 
+    # --- Half ---
     start = ev.get("start") or {}
     half = int(start.get("half", 0) or _half_from_game_time(ev.get("gameTime", "")))
+
+    # --- Frame ---
+    # Formato legacy: start.frame
+    # Formato real: position (string con numero de frame)
     frame = int(start.get("frame", 0) or 0)
+    if frame <= 0:
+        # Intentar desde "position" (formato real Labels-v2)
+        pos_str = ev.get("position")
+        if pos_str is not None:
+            try:
+                frame = int(pos_str)
+            except (ValueError, TypeError):
+                frame = 0
     if half not in (1, 2) or frame <= 0:
         return None
 
@@ -202,6 +227,7 @@ def _event_to_label_row(
     if team not in ("home", "away"):
         team = "unknown"
 
+    # --- Actor/Target (legacy format only) ---
     actor = ev.get("from") or {}
     target = ev.get("to") or ev.get("duel", {}).get("opponent") or {}
     actor_jersey = actor.get("jersey")
@@ -214,24 +240,44 @@ def _event_to_label_row(
         if target_track is not None:
             target_track += 100
 
-    # Resolver start_x_m, start_y_m desde el tracking (actor en start frame).
+    # --- Resolver posiciones desde el tracking ---
     sx = sy = None
     ex = ey = None
     mid = f"{game.match_id}__h{half}"
+
+    # 1) Intentar con actor_track especifico
     actor_index = tracking_index.get((mid, frame), {})
     if actor_track is not None and actor_track in actor_index:
         sx, sy = actor_index[actor_track]
+
+    # 2) Si no hay actor_track (formato real), usar el jugador mas cercano
+    #    al centro del campo en ese frame como proxy del actor.
+    if sx is None and actor_index:
+        center_x = 52.5  # mitad del campo (105m)
+        center_y = 34.0  # mitad del campo (68m)
+        best_tid = None
+        best_dist = float("inf")
+        for tid, (mx, my) in actor_index.items():
+            d = (mx - center_x) ** 2 + (my - center_y) ** 2
+            if d < best_dist:
+                best_dist = d
+                best_tid = tid
+        if best_tid is not None:
+            sx, sy = actor_index[best_tid]
+            actor_track = best_tid
+
+    # 3) End position (legacy)
     end_block = ev.get("end") or {}
     end_frame = int(end_block.get("frame", frame) or frame)
     if end_frame != frame and actor_track is not None:
         end_pos = tracking_index.get((mid, end_frame), {}).get(actor_track, (None, None))
         ex, ey = end_pos
+
     if sx is None and ex is None:
-        # Sin anclaje al campo el evento es inutil para features.
         return None
 
     result = str(ev.get("result") or ev.get("subtype") or "").strip() or None
-    visibility = str(start.get("visibility", "visible")).lower()
+    visibility = str(ev.get("visibility", start.get("visibility", "visible"))).lower()
 
     return {
         "match_id":        game.match_id,         # root, NO suffix por mitad
@@ -364,6 +410,153 @@ def normalize_all(
         if n % 25 == 0:
             info(f"  {n} partidos normalizados...")
     info(f"Total partidos normalizados: {n}")
+    return summaries
+
+
+# ---------------------------------------------------------------------------
+# MOT20 tracking -> filas atomicas
+# ---------------------------------------------------------------------------
+def _track_to_atomic_rows_mot(
+    clip: GameDirMot,
+    cfg: NormalizeConfig,
+) -> list[dict[str, Any]]:
+    """
+    Convierte un clip MOT20 (gt.txt) en filas atomicas compatibles
+    con tracking_events.
+
+    El formato MOT20 da bounding boxes en pixeles del frame del video
+    broadcast (1920x1080 tipicamente). Convertimos el centro del bbox
+    a coordenadas normalizadas [0,1] y luego a metros via FieldDims.
+
+    Convenciones:
+      - track_id se conserva tal cual del MOT (no hay jersey/team info).
+      - object_type es "player" para todos (MOT no distingue pelota).
+      - team es "unknown" (sin info de equipos en MOT).
+    """
+    fps = cfg.fps
+    img_w = float(clip.img_w)
+    img_h = float(clip.img_h)
+
+    rows: list[dict[str, Any]] = []
+    for rec in read_tracking_mot(clip.mot_gt_path):
+        frame = rec["frame"]
+        track_id = rec["track_id"]
+        conf = rec["confidence"]
+
+        # Centro del bounding box
+        cx = rec["bbox_x"] + rec["width"] / 2.0
+        cy = rec["bbox_y"] + rec["height"] / 2.0
+
+        # Normalizar a [0, 1] por dimensiones del frame
+        x_norm = cx / img_w
+        y_norm = cy / img_h
+
+        # A metros via field_dims
+        x_m = x_norm * cfg.field_dims.length_m
+        y_m = y_norm * cfg.field_dims.width_m
+
+        # Pixeles del frame (proxy, no del campo)
+        x_px = cx
+        y_px = cy
+
+        rows.append({
+            "match_id":      f"{clip.match_id}__h1",   # suffix por mitad (siempre h1 para clips MOT)
+            "frame":         frame,
+            "timestamp_ms":  int(round(frame * 1000.0 / fps)),
+            "object_type":   "player",
+            "track_id":      track_id,
+            "team":          "unknown",
+            "x":             x_px,
+            "y":             y_px,
+            "x_norm":        x_norm,
+            "y_norm":        y_norm,
+            "x_m":           x_m,
+            "y_m":           y_m,
+            "confidence":    conf,
+            "in_occlusion":  False,
+            "source_chunk":  str(clip.mot_gt_path),
+        })
+    return rows
+
+
+def normalize_one_mot(
+    clip: GameDirMot,
+    cfg: NormalizeConfig,
+) -> dict[str, Any]:
+    """
+    Normaliza un unico clip MOT. Devuelve un dict con paths escritos y counts.
+    """
+    out = Path(cfg.output_dir) / clip.match_id
+    out.mkdir(parents=True, exist_ok=True)
+
+    # 1) Tracking
+    all_track_rows = _track_to_atomic_rows_mot(clip, cfg)
+    tracking_df = pd.DataFrame(all_track_rows)
+    if not tracking_df.empty:
+        for col in ("x", "y", "x_norm", "y_norm", "x_m", "y_m"):
+            if col in tracking_df.columns:
+                tracking_df[col] = pd.to_numeric(tracking_df[col], errors="coerce")
+    tracking_path = out / "tracking.parquet"
+    if not tracking_df.empty:
+        write_parquet(tracking_df, tracking_path)
+
+    # 2) Labels (si hay match con Labels-v2.json)
+    label_rows: list[dict[str, Any]] = []
+    if clip.labels_path is not None and clip.labels_path.is_file():
+        tracking_index = _build_tracking_index(tracking_df)
+        # Crear un GameDir dummy para reusar _event_to_label_row
+        # El match_id del GameDir debe ser el root (sin __h suffix)
+        # porque _event_to_label_row agrega __h{half} internamente.
+        dummy_game = GameDir(
+            match_id=clip.match_id,  # root sin suffix
+            path=clip.path,
+            labels_path=clip.labels_path,
+            half_labels={},
+            tracking_paths={},
+        )
+        for ev in read_labels(clip.labels_path):
+            row = _event_to_label_row(ev, dummy_game, cfg.fps, tracking_index)
+            if row is not None:
+                label_rows.append(row)
+
+    labels_df = pd.DataFrame(label_rows)
+    if not labels_df.empty:
+        labels_df = labels_df.drop_duplicates(
+            subset=["match_id", "half", "frame", "event_type"], keep="first"
+        )
+    labels_path = out / "events.parquet"
+    if not labels_df.empty:
+        write_parquet(labels_df, labels_path)
+
+    return {
+        "match_id":      clip.match_id,
+        "tracking_rows": int(len(tracking_df)),
+        "label_rows":    int(len(labels_df)),
+        "tracking_path": str(tracking_path) if not tracking_df.empty else None,
+        "labels_path":   str(labels_path) if not labels_df.empty else None,
+    }
+
+
+def normalize_all_mot(
+    norm_cfg: NormalizeConfig,
+    dl_cfg: DownloadConfig,
+) -> list[dict[str, Any]]:
+    """
+    Itera todos los clips MOT que `dl_cfg` sepa localizar y los normaliza
+    con `norm_cfg`. Devuelve una lista de summaries por clip.
+    """
+    summaries: list[dict[str, Any]] = []
+    n = 0
+    for clip in iter_games_mot(dl_cfg):
+        if not clip.has_minimum():
+            warn(f"Skip {clip.match_id}: no tiene gt.txt")
+            continue
+        s = normalize_one_mot(clip, norm_cfg)
+        summaries.append(s)
+        n += 1
+        if n % 50 == 0:
+            info(f"  {n} clips normalizados...")
+    info(f"Total clips MOT normalizados: {n}")
     return summaries
 
 
@@ -512,6 +705,8 @@ def main(argv: list[str] | None = None) -> int:
                    help="Ademas de normalizar, ingestar en la DB.")
     p.add_argument("--match-id", default=None,
                    help="Filtrar ingesta a un solo match_id.")
+    p.add_argument("--tracking-format", default="mot", choices=["mot", "jsonl"],
+                   help="Formato de tracking: 'mot' (MOT20 CSV) o 'jsonl' (legacy).")
     args = p.parse_args(argv)
 
     from .config import DownloadConfig, FieldDims, NormalizeConfig
@@ -521,10 +716,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     dl_cfg = DownloadConfig(
         raw_dir=Path(args.raw_dir) if args.raw_dir else None,
+        tracking_format=args.tracking_format,
     )
 
     with stage("normalize"):
-        summaries = normalize_all(norm_cfg, dl_cfg)
+        if args.tracking_format == "mot":
+            summaries = normalize_all_mot(norm_cfg, dl_cfg)
+        else:
+            summaries = normalize_all(norm_cfg, dl_cfg)
 
     if args.ingest:
         with stage("ingest-to-db"):

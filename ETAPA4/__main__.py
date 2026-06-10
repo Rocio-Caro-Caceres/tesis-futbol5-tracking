@@ -31,6 +31,8 @@ def _build_parser() -> argparse.ArgumentParser:
                     choices=["train", "valid", "test", "challenge"])
     dl.add_argument("--soccernet-password", default="s0cc3rn3t",
                     help="Password academica por default. Overrideable via SOCCERNET_PASSWORD.")
+    dl.add_argument("--tracking-format", default="mot", choices=["mot", "jsonl"],
+                    help="Formato de tracking: 'mot' (MOT20 CSV, default) o 'jsonl' (legacy).")
 
     # --- normalize
     nm = sub.add_parser("normalize", help="SoccerNet -> Parquet atomico (tracking_events shape)")
@@ -41,6 +43,8 @@ def _build_parser() -> argparse.ArgumentParser:
                     help="Ademas de normalizar, ingestar en la DB (tracking_events + event_training_labels)")
     nm.add_argument("--match-id", default=None,
                     help="Filtrar ingesta a un solo match_id")
+    nm.add_argument("--tracking-format", default="mot", choices=["mot", "jsonl"],
+                    help="Formato de tracking: 'mot' (MOT20 CSV) o 'jsonl' (legacy).")
 
     # --- features
     ft = sub.add_parser("features", help="Ventanas temporales -> X_seq.npy / X_flat.npy")
@@ -99,6 +103,7 @@ def main(argv: list[str] | None = None) -> int:
             output_dir=Path(args.output_dir),
             split=tuple(args.splits),
             password=args.soccernet_password,
+            tracking_format=args.tracking_format,
         )
         download(cfg)
         return 0
@@ -107,6 +112,7 @@ def main(argv: list[str] | None = None) -> int:
         from .normalize import main as normalize_main
         ns = [
             "--output-dir", str(args.output_dir),
+            "--tracking-format", str(args.tracking_format),
         ]
         if args.raw_dir:
             ns += ["--raw-dir", str(args.raw_dir)]
