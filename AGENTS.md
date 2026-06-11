@@ -25,16 +25,21 @@ Compact reference for OpenCode sessions on this Windows-first tesis repo
 
 ## Data flows (4 of them)
 
-`tracking.py` writes two outputs per frame (legacy CSVs + JSON chunks);
-the other two are offline:
+`tracking.py` writes JSON chunks + annotated video. The other flows
+are offline:
 
-1. **Legacy CSV** (`videos/*.csv`, `videos/*.avi`) — gitignored, kept for now.
-2. **JSON chunks → PostgreSQL** (Etapa 1): `chunks/<MATCH_ID>/chunk_NNNNN.json`
-   + `match.json` → `scripts.ingest.py` → TimescaleDB + PostGIS.
+1. **JSON chunks** (`chunks/<MATCH_ID>/chunk_NNNNN.json` + `match.json`)
+   — primary output. No legacy CSV is written (removed).
+2. **JSON chunks → PostgreSQL** (Etapa 1): `scripts.ingest.py` →
+   TimescaleDB + PostGIS.
 3. **METRICAS** (Etapa 2 + 3, offline): `python -m METRICAS --input ...`
    → `players_metrics.csv`, `summary_*.json`, heatmaps, possession/events.
 4. **SoccerNet ML** (Etapa 4, optional GPU): `python -m ETAPA4 download
    --normalize --features --train-xgb/lstm/benchmark`.
+
+**CRITICAL GAP**: There is no converter from JSON chunks (flow 1) to
+CSV that METRICAS (flow 3) can consume. This must be built before
+METRICAS can run on real tracking data. See `issues.md` #10.
 
 When asked to "add tracking output", ask which flow. For ML on tracking
 data prefer flow 4.
@@ -198,6 +203,16 @@ python -m ETAPA4 benchmark  --features-dir ETAPA4_data/features --output-dir ETA
   or use `pip install -r requirements*.txt` outside `.venv`.
 - `tracking.py` reads absolute Windows paths. WSL can read the
   codebase but not the video file. Run `tracking.py` from PowerShell.
+
+## MVP scope
+
+The MVP delivers 4 metrics from futsal video: **heatmap, possession,
+distance traveled, goal events**. See `mvp.md` for full spec and
+`issues.md` for the task breakdown (9 done, 6 pending).
+
+The user's role is the "middle" pipeline: take CV tracking data →
+compute metrics → output stats for web. The web platform and the CV
+processing itself are handled by other people.
 
 ## Things you should NOT do
 
