@@ -11,6 +11,8 @@ Compact reference for OpenCode sessions on this Windows-first tesis repo
   NumPy/PyTorch and CPU-friendly.
 - Branch: `fran` (active); `origin/HEAD` → `develop`.
 - **No pytest/ruff/mypy/CI.**
+- `requirements.txt` is **UTF-16 encoded** — some tools choke on it.
+  Use `pip install -r requirements.txt` directly (works fine).
 - `LaurieOnTracking repo/` is read-only reference code. Do not modify.
 - **README is stale** — only documents Etapa 1.
 
@@ -208,7 +210,7 @@ python -m ETAPA4 benchmark  --features-dir ETAPA4_data/features --output-dir ETA
 
 The MVP delivers 4 metrics from futsal video: **heatmap, possession,
 distance traveled, goal events**. See `mvp.md` for full spec and
-`issues.md` for the task breakdown (9 done, 6 pending).
+`issues.md` for the task breakdown (8 done, 4 pending).
 
 The user's role is the "middle" pipeline: take CV tracking data →
 compute metrics → output stats for web. The web platform and the CV
@@ -224,3 +226,36 @@ processing itself are handled by other people.
 - Add pytest/ruff/mypy config from scratch — the project has none.
 - Bypass `--rebuild-tracking` confirmation, or change `MAX_JUGADORES`
   / `DIST_MAX_REID` / `IOU_OCLUSION` without asking.
+
+
+## Integración con cerebro
+
+**Este proyecto está conectado con cerebro** (`C:\Users\Francisco\Documents\GitHub\cerebro`).
+
+### Al completar una tarea
+1. Crear accionable en: `C:\Users\Francisco\Documents\GitHub\cerebro\vault\accionables\`
+   - Nombre: `accionable-[proyecto]-[YYYY-MM-DD]-[descripcion].md`
+2. Actualizar conocimiento en: `C:\Users\Francisco\Documents\GitHub\cerebro\vault\knowledge\projects\[proyecto].md`
+3. Si la tarea estaba en Tareas Activas de cerebro, marcarla como completada
+
+### Formato del accionable
+```markdown
+# [Título]
+
+- **Proyecto**: [nombre]
+- **Fecha**: YYYY-MM-DD
+- **Agent**: [nombre]
+- **Estado**: completado
+
+## Qué se hizo
+[descripción]
+
+## Aprendizajes
+[qué aprendiste]
+
+## Referencias
+[archivos, links]
+```
+
+### Commando /guardar
+Cuando el usuario diga "/guardar" o cuando completes algo significativo, ejecutá el protocolo de integración con cerebro automáticamente.
